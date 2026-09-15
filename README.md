@@ -71,20 +71,20 @@ All six pooled slopes are negative after detrending, but these are **descriptive
 
 ### 3. Climate exposure is local, not one global ranking
 
-The risk screen combines two signals:
+The risk screen combines two detrended signals:
 
-- yield volatility, and
+- yield volatility around each country × crop's own long-run trend, and
 - a negative **detrended** temperature-yield association.
 
 Highest V1 priority segments include:
 
 | Priority | Country | Crop | Risk score | Detrended temp slope |
 |---:|---|---|---:|---:|
-| 1 | Cameroon | Potatoes | **0.9904** | -2.9653 |
-| 2 | Oman | Barley | **0.9856** | -1.6709 |
-| 3 | Oman | Maize | **0.9842** | -1.5755 |
-| 4 | Saint Vincent and the Grenadines | Maize | **0.9835** | -2.3649 |
-| 5 | Tajikistan | Maize | **0.9760** | -1.3614 |
+| 1 | Oman | Barley | **0.9856** | -1.6709 |
+| 2 | Oman | Maize | **0.9856** | -1.5755 |
+| 3 | Rwanda | Potatoes | **0.9794** | -4.7536 |
+| 4 | Cameroon | Potatoes | **0.9760** | -2.9653 |
+| 5 | Paraguay | Potatoes | **0.9739** | -1.7113 |
 
 This score is a **prioritization tool**, not an insurance-grade risk estimate and not proof that temperature caused the yield changes.
 
@@ -161,7 +161,7 @@ See [`docs/data_sources.md`](docs/data_sources.md) and [`docs/methodology.md`](d
 4. Is there really one “perfect temperature” for yield?
 5. Does more precipitation always mean better yield?
 6. What can irrigation and fertilizer tell us — and where is coverage too weak?
-7. Which country-crop combinations combine volatility with negative temperature association?
+7. Which country-crop combinations combine detrended volatility with negative temperature association?
 8. Can a model trained on the past beat strong historical baselines on 2018+ data?
 9. Where does the model fail?
 
@@ -217,6 +217,7 @@ climate-crop-yield-intelligence/
 ├── slides/
 │   └── presentation_story.md
 ├── src/climate_crop_yield/
+│   ├── analysis.py
 │   ├── data.py
 │   ├── features.py
 │   ├── model.py
@@ -248,12 +249,16 @@ python scripts/run_live_analysis.py
 jupyter notebook
 ```
 
+Running `python scripts/run_live_analysis.py` also writes a machine-readable summary to:
+
+`reports/tables/live_analysis_summary.json`
+
 ### GitHub Actions
 
 Two workflows protect the project:
 
 - **CI** — runs the offline test suite on every push / pull request.
-- **Live data validation** — downloads the real public datasets, rebuilds the analysis panel and runs the full live analysis report.
+- **Live data validation** — downloads the real public datasets, rebuilds the analysis panel, runs the full live analysis report, executes the portfolio notebook end to end, and uploads both the executed notebook and `live_analysis_summary.json` as the `validated-live-analysis` artifact.
 
 ---
 

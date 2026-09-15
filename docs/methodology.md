@@ -70,10 +70,12 @@ V1 does not do this. Exact continuous values are too sparse and noisy for that i
 
 ## Risk prioritization score
 
-The country-crop risk screen combines:
+The country-crop risk screen combines two trend-adjusted signals:
 
-1. **yield volatility** — coefficient of variation of historical yield, and
+1. **detrended yield volatility** — the standard deviation of yield residuals after removing the country × crop linear time trend, divided by that history's mean yield, and
 2. **warming penalty** — the negative part of the country-crop detrended temperature-yield slope.
+
+Using residual volatility avoids treating a strong long-run increase in yield as if it were instability.
 
 Each component is converted to a percentile rank, and the two ranks are averaged.
 
@@ -122,6 +124,14 @@ Validated 2018+ results:
 - model R²: 0.9038
 
 The model improves on the static country × crop median by 10.62%, but it does not beat persistence. That failure is retained as a real project result.
+
+## Machine-readable validation output
+
+`scripts/run_live_analysis.py` writes the validated result set to:
+
+`reports/tables/live_analysis_summary.json`
+
+The live-data GitHub Actions workflow uploads this JSON together with the fully executed portfolio notebook as the `validated-live-analysis` artifact.
 
 ## Causal limitations
 

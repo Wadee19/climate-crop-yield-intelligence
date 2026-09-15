@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from climate_crop_yield.analysis import build_risk_table, yield_change_summary
 from climate_crop_yield.data import build_analysis_panel
 from climate_crop_yield.features import add_features, crop_temperature_sensitivity, validate_panel
 from climate_crop_yield.model import fit_time_split
+
+
+SUMMARY_PATH = Path("reports/tables/live_analysis_summary.json")
 
 
 def pct(value: float) -> float:
@@ -83,9 +87,14 @@ def main() -> None:
         for _, row in error_by_crop.iterrows()
     ]
 
+    summary_json = json.dumps(report, indent=2, sort_keys=True)
+    SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SUMMARY_PATH.write_text(summary_json + "\n", encoding="utf-8")
+
     print("=== LIVE ANALYSIS REPORT START ===")
-    print(json.dumps(report, indent=2, sort_keys=True))
+    print(summary_json)
     print("=== LIVE ANALYSIS REPORT END ===")
+    print(f"LIVE_ANALYSIS_SUMMARY={SUMMARY_PATH}")
 
 
 if __name__ == "__main__":

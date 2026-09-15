@@ -56,3 +56,12 @@ jobs:
             --output 01_climate_crop_yield_business_analysis.executed.ipynb \
             --output-dir /tmp/executed-notebook \
             --ExecutePreprocessor.timeout=900
+      - name: Upload validated analysis artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: validated-live-analysis
+          path: |
+            reports/tables/live_analysis_summary.json
+            /tmp/executed-notebook/01_climate_crop_yield_business_analysis.executed.ipynb
+          if-no-files-found: error
+          retention-days: 30
