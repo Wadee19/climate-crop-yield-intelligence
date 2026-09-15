@@ -1,144 +1,106 @@
-# Methodology Notes
+# Methodology
 
-## Unit of analysis
+## Scope
 
-The core panel is **country × year × crop**.
+V1 uses a country × year × crop panel for six crops from 1990–2023. The project is a portfolio case study and a country-level screening / forecasting exercise, not a causal agronomy study or a farm-level operational model.
 
-V1 analyzes six crops from 1990–2023:
+## 1. Long-run yield change
 
-- Wheat
-- Maize
-- Rice
-- Potatoes
-- Soybeans
-- Barley
+The headline early-vs-recent comparison uses the **same country cohort** in both windows:
 
-Only true three-letter ISO country / territory codes are retained. OWID aggregate rows such as `OWID_AFR` and `OWID_WRL` are excluded before the datasets are merged.
+- early: 1990–1994
+- recent: 2019–2023
+- at least 3 observed years in each window
 
-## Data overlap and coverage
+For every country × crop, the median yield is calculated inside each window. Only histories observed in both windows are kept. Crop-level early and recent medians are then calculated across that matched cohort.
 
-The 1990–2023 window was selected to create useful overlap between crop yield, temperature, precipitation, fertilizer and irrigation data.
+This prevents changing country coverage from driving the headline trend.
 
-The validated live panel contains:
+## 2. Descriptive climate features
 
-- 24,892 country-year-crop rows
-- 187 countries / territories
-- 100% yield coverage
-- 97.59% temperature coverage
-- 97.59% precipitation coverage
-- 97.15% fertilizer coverage
-- 22.64% irrigation coverage
+For exploratory analysis, annual temperature and precipitation are centered on each country's full-period mean. These full-period deviations are **not** used by the predictive model.
 
-Because irrigation is observed for less than one quarter of the panel, it is used for exploratory analysis only and is **not** included in the core predictive model.
+Year-to-year yield change is shown with 1st–99th percentile clipping only for visualization. The original yield observations are unchanged.
 
-## Long-term crop trends
+## 3. Detrending and cross-crop sensitivity
 
-Yield trends are summarized by comparing the median crop yield in 1990–1994 with 2019–2023.
+Temperature and yield can both trend over time. V1 therefore removes a linear time trend inside each country × crop history before comparing annual deviations.
 
-This comparison is descriptive. It does not attribute yield improvement to climate, fertilizer, technology or any other single cause.
+For cross-crop comparison, the yield residual is expressed as a percentage of that country-crop history's mean yield:
 
-## Climate deviations for EDA
+`relative yield residual (%) = 100 × detrended yield residual / mean yield`
 
-The notebook creates country-centered temperature and precipitation deviations for descriptive plots:
+The public sensitivity metric is the pooled slope:
 
-`annual value - country mean over the analysis panel`
+`relative yield residual (%) ~ detrended temperature residual (°C)`
 
-These full-period deviations are useful for EDA but are deliberately **not used as predictive features**, because doing so would let the test period influence the climate normal.
+This is more scale-aware than comparing raw t/ha slopes across crops such as potatoes and wheat. It is still a descriptive association, not a causal temperature effect.
 
-## Detrended temperature sensitivity
+## 4. Temperature ranges
 
-A raw temperature-yield correlation is strongly confounded by time. Agricultural productivity has generally improved over the same decades in which temperatures have trended upward.
+Temperature bins are quantile-based and created **inside each crop**. They are exploratory ranges only; no bin is presented as a physiological optimum.
 
-To reduce this trend confounding, V1 removes a linear year trend separately inside every country × crop history for both:
+## 5. Management variables
 
-- annual temperature, and
-- crop yield.
+Irrigation and fertilizer are country-level observational indicators. Irrigation coverage is limited, so irrigation remains exploratory and is not used in the predictive model.
 
-The pooled crop-level sensitivity is then estimated from:
+Management plots use a within-crop yield index to avoid directly comparing the absolute t/ha scale of potatoes with cereals. These plots are descriptive and do not estimate treatment effects.
 
-`detrended yield residual ~ detrended temperature residual`
+## 6. Screening score
 
-This asks whether warmer-than-trend years tend to coincide with yield above or below that production system's own trend.
+The V1 screening score is a transparent prioritization heuristic with two scale-aware components:
 
-It is still an **association**, not a causal treatment effect.
+1. standard deviation of detrended relative yield residuals (%), and
+2. the negative part of the relative temperature-yield slope (% yield per +1°C).
 
-## No single-degree optimum
+Country × crop histories need at least **20 usable observations**. Each component is converted to a percentile rank and the two ranks are weighted 50/50.
 
-The earlier university analysis selected one exact observed temperature with the highest mean yield and treated it as an optimum.
+The score is not a probability of loss, an insurance estimate, or proof that temperature caused yield changes.
 
-V1 does not do this. Exact continuous values are too sparse and noisy for that interpretation. Temperature ranges / bins are used instead, and any apparent optimum is treated as descriptive rather than physiological proof.
+## 7. Prediction and leakage control
 
-## Risk prioritization score
+The predictive task uses a fixed past-to-future split:
 
-The country-crop risk screen combines two trend-adjusted signals:
+- train: 1990–2017
+- test: 2018–2023
 
-1. **detrended yield volatility** — the standard deviation of yield residuals after removing the country × crop linear time trend, divided by that history's mean yield, and
-2. **warming penalty** — the negative part of the country-crop detrended temperature-yield slope.
+Each country × crop starts from its training-period median yield. The model predicts a residual correction.
 
-Using residual volatility avoids treating a strong long-run increase in yield as if it were instability.
+Climate and fertilizer anomalies are calculated using **training-period country normals only**. Test-period values never enter those normals.
 
-Each component is converted to a percentile rank, and the two ranks are averaged.
+Two Random Forest residual models are evaluated with identical settings:
 
-The score is intended to answer:
+- **climate-only:** temperature anomaly + precipitation anomaly + crop identity
+- **climate + fertilizer:** the climate features + fertilizer anomaly + crop identity
 
-> Which country-crop histories deserve deeper local investigation first?
+This ablation separates the predictive value of climate from the incremental value of fertilizer.
 
-It is not an insurance model, crop-loss probability, causal climate-damage estimate or investment recommendation by itself.
+Random Forest settings:
 
-A country-crop history must have at least 15 usable observations to enter the ranking.
+- 250 trees
+- `min_samples_leaf = 5`
+- `random_state = 42`
 
-## Predictive evaluation
+These parameters are fixed before test evaluation and are not tuned against the 2018–2023 holdout.
 
-The forecasting experiment uses a strict time split:
+## 8. Baselines
 
-- **Train:** years before 2018
-- **Test:** 2018 onward
+Both models are compared with:
 
-The model does not use the full-period descriptive climate deviations.
+1. crop median,
+2. country × crop training-period median,
+3. fixed persistence: the last observed pre-2018 yield for that country × crop.
 
-Instead, country climate / fertilizer normals are calculated from the **training period only**, and the predictive features are:
+The fixed persistence baseline uses no 2018–2023 labels. It is therefore a clean single-origin benchmark across the full holdout.
 
-- temperature anomaly from the train-period country normal,
-- precipitation anomaly from the train-period country normal,
-- fertilizer anomaly from the train-period country normal,
-- crop identity.
+## 9. Reproducibility
 
-The model predicts a residual correction around each country × crop's historical training-period yield level.
+The repository pins the validated Python data stack in `requirements.txt`. GitHub Actions:
 
-## Baselines
+1. downloads the live public datasets,
+2. rebuilds the panel,
+3. runs the full analysis summary,
+4. executes the notebook end to end,
+5. uploads the executed notebook, generated figures, and machine-readable summary as an artifact.
 
-V1 reports three baselines instead of comparing the model only with an easy global average:
-
-1. crop median from the training period,
-2. country × crop median from the training period,
-3. persistence — the final observed pre-2018 yield for that country × crop.
-
-The persistence baseline is the hardest comparison because annual crop yield often has strong temporal continuity.
-
-Validated 2018+ results:
-
-- crop median MAE: 3.4478 t/ha
-- country × crop median MAE: 1.6192 t/ha
-- climate-anomaly residual model MAE: 1.4473 t/ha
-- persistence MAE: 0.8976 t/ha
-- model R²: 0.9038
-
-The model improves on the static country × crop median by 10.62%, but it does not beat persistence. That failure is retained as a real project result.
-
-## Machine-readable validation output
-
-`scripts/run_live_analysis.py` writes the validated result set to:
-
-`reports/tables/live_analysis_summary.json`
-
-The live-data GitHub Actions workflow uploads this JSON together with the fully executed portfolio notebook as the `validated-live-analysis` artifact.
-
-## Causal limitations
-
-All climate and management variables are observational and aggregated at country-year level.
-
-Associations must not be described as treatment effects.
-
-The data do not directly capture growing-season heat extremes, rainfall timing, soil properties, planting dates, cultivar choice, irrigation efficiency, farm-level management, prices or policy changes.
-
-The project therefore treats V1 as a reproducible screening and decision-support analysis, not a farm-level causal model.
+Public narrative metrics are normally rounded to three decimals to avoid implying meaningful precision in the last environment-dependent digit.
