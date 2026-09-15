@@ -1,4 +1,4 @@
-name: Live data smoke test
+name: Live data validation
 
 on:
   workflow_dispatch:
@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "src/**"
+      - "scripts/**"
       - "requirements.txt"
       - "pyproject.toml"
       - ".github/workflows/live-data-smoke.yml"
@@ -41,3 +42,5 @@ jobs:
           assert df["crop"].nunique() == 6
           assert df["Code"].nunique() > 30
           PY
+      - name: Run full live analysis report
+        run: python scripts/run_live_analysis.py
