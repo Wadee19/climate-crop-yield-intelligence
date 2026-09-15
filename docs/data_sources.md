@@ -1,48 +1,70 @@
 # Data Sources
 
-All V1 data are public and downloaded at run time from reproducible Our World in Data Grapher endpoints. Raw third-party datasets are not committed to the repository.
+The project uses public Our World in Data Grapher endpoints so the notebook and live validation can rebuild the panel without committing third-party raw data.
 
 ## Crop yields
 
-**Provider:** Food and Agriculture Organization of the United Nations (FAO), Production: Crops and livestock products, distributed through Our World in Data.
+Source family: **Food and Agriculture Organization of the United Nations (FAO), Production: Crops and livestock products**, processed/distributed through Our World in Data. Some OWID crop-yield pages may combine additional national sources for specific countries or recent years.
 
-**Unit:** tonnes per hectare.
+Unit used by the project: **tonnes per hectare**.
 
-V1 crops:
+Grapher series:
 
-- Wheat
-- Maize
-- Rice
-- Potatoes
-- Soybeans
-- Barley
+- `wheat-yields`
+- `maize-yields`
+- `rice-yields`
+- `potato-yields`
+- `soybean-yields`
+- `barley-yields`
 
-The exact Grapher slugs are defined in `src/climate_crop_yield/data.py`.
+## Temperature
 
-## Climate
+Series: `average-annual-surface-temperature`
 
-**Provider:** Copernicus Climate Change Service / ERA5, distributed through Our World in Data.
+Source: **Copernicus Climate Change Service / ERA5**, processed by Our World in Data.
 
-- Average annual surface temperature — °C
-- Annual precipitation — millimeters
+Unit: **°C**, annual average surface air temperature at 2 m.
 
-Annual country averages are useful for a broad panel study but do not capture growing-season heat extremes or rainfall timing.
+## Precipitation
 
-## Management
+Series: `average-precipitation-per-year`
 
-**Provider:** FAO via World Bank / Our World in Data.
+Source: **Copernicus Climate Change Service / ERA5**, processed by Our World in Data.
 
-- Fertilizer use — kilograms per hectare of arable land
-- Share of agricultural land irrigated — % of total agricultural land
+Unit: **millimeters per year**.
 
-The fertilizer source notes methodology revisions and incomplete consistency across countries and over time. These variables are therefore treated as observational context, not causal treatment variables.
+## Fertilizer
 
-Irrigation has limited matched coverage in the final crop panel and is kept exploratory.
+Series: `fertilizer-use-in-kg-per-hectare-of-arable-land`
 
-## Filtering
+Source: **FAO via World Bank World Development Indicators**, processed by Our World in Data.
 
-The analysis retains three-letter country / territory codes and removes OWID aggregate rows such as `OWID_WRL` and `OWID_AFR`.
+Unit: **kg per hectare of arable land**.
+
+## Irrigation
+
+Series: `agricultural-land-irrigation`
+
+Source: **FAO via World Bank World Development Indicators**, processed by Our World in Data.
+
+Unit: **% of total agricultural land**.
+
+The source page describes irrigated agricultural area as land purposely provided with water by artificial means.
+
+## Programmatic endpoint pattern
+
+CSV:
+
+`https://ourworldindata.org/grapher/<slug>.csv?v=1&csvType=full&useColumnShortNames=false`
+
+Metadata:
+
+`https://ourworldindata.org/grapher/<slug>.metadata.json?v=1&csvType=full&useColumnShortNames=false`
 
 ## Reproducibility
 
-The notebook and package use the same public Grapher endpoints. Source URLs are generated from the slugs in `src/climate_crop_yield/data.py`.
+Raw third-party data are not committed to the repository.
+
+The live-data workflow downloads the sources again and validates that the panel can still be rebuilt.
+
+Source metadata was reviewed again during the final portfolio audit in September 2026.

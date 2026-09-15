@@ -7,6 +7,8 @@ on:
     paths:
       - "src/**"
       - "scripts/**"
+      - "notebooks/**"
+      - "docs/**"
       - "requirements.txt"
       - "pyproject.toml"
       - ".github/workflows/live-data-validation.yml"
@@ -16,33 +18,96 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11.16"
+
       - run: pip install -r requirements.txt
       - run: pip install -e .
+
       - name: Check public data endpoints and build panel
         run: |
           python - <<'PY'
           from climate_crop_yield.data import build_analysis_panel
           from climate_crop_yield.features import add_features, validate_panel
+
           df = build_analysis_panel(start_year=1990, end_year=2023)
           validate_panel(df)
           df = add_features(df)
+
           print("LIVE_DATA_ROWS=", len(df))
           print("LIVE_DATA_COUNTRIES=", df["Code"].nunique())
           print("LIVE_DATA_CROPS=", df["crop"].nunique())
           print("LIVE_DATA_YEARS=", df["Year"].min(), df["Year"].max())
+
           assert len(df) > 1000
           assert df["crop"].nunique() == 6
           assert df["Code"].nunique() > 30
           PY
-      - name: Run full live analysis report
+
+      - name: Run full live package analysis and generate figures
+        env:
+          MPLBACKEND: Agg
         run: python scripts/run_live_analysis.py
-      - name: Upload validated analysis summary
+
+      - name: Execute standalone portfolio notebook end to end
+        env:
+          MPLBACKEND: Agg
+        run: |
+          mkdir -p /tmp/executed-notebook
+          jupyter nbconvert \
+            --to notebook \
+            --execute notebooks/01_climate_crop_yield_business_analysis.ipynb \
+            --output 01_climate_crop_yield_business_analysis.executed.ipynb \
+            --output-dir /tmp/executed-notebook \
+            --ExecutePreprocessor.timeout=900
+
+      - name: Check notebook and package headline parity
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          live = json.loads(Path("reports/tables/live_analysis_summary.json").read_text())
+          nb = json.loads(Path("reports/tables/notebook_summary.json").read_text())
+
+          assert nb["dataset"]["rows"] == live["dataset"]["rows"]
+          assert nb["dataset"]["countries"] == live["dataset"]["countries"]
+          assert nb["dataset"]["crops"] == live["dataset"]["crops"]
+
+          live_changes = {r["crop"]: r["change_pct"] for r in live["matched_country_yield_change"]}
+          assert nb["matched_country_yield_change"] == live_changes
+
+          assert nb["relative_temperature_sensitivity_pct_per_1c"] == live["relative_temperature_sensitivity_pct_per_1c"]
+
+          top = live["top_screening_segments"][0]
+          assert nb["top_screening_segment"]["country"] == top["country"]
+          assert nb["top_screening_segment"]["crop"] == top["crop"]
+          assert nb["top_screening_segment"]["screening_score"] == top["screening_score"]
+
+          keys = [
+              "crop_median_mae",
+              "country_crop_median_mae",
+              "climate_only_mae",
+              "climate_plus_fertilizer_mae",
+              "persistence_mae",
+              "full_model_r2",
+          ]
+          for key in keys:
+              assert nb["model_metrics"][key] == live["model_metrics"][key], (key, nb["model_metrics"][key], live["model_metrics"][key])
+
+          print("NOTEBOOK_PACKAGE_PARITY=PASS")
+          PY
+
+      - name: Upload validated portfolio artifacts
         uses: actions/upload-artifact@v4
         with:
           name: validated-live-analysis
-          path: reports/tables/live_analysis_summary.json
+          path: |
+            reports/tables/live_analysis_summary.json
+            reports/tables/notebook_summary.json
+            reports/figures/*.png
+            /tmp/executed-notebook/01_climate_crop_yield_business_analysis.executed.ipynb
           if-no-files-found: error
           retention-days: 30

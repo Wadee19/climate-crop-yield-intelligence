@@ -1,14 +1,26 @@
 # Run in Google Colab
 
-The portfolio notebook is standalone.
+The portfolio notebook is standalone:
 
-1. Open `notebooks/01_climate_crop_yield_business_analysis.ipynb`.
-2. Upload it to Google Colab.
-3. Use a normal Python CPU runtime.
-4. Run all cells from top to bottom.
+`notebooks/01_climate_crop_yield_business_analysis.ipynb`
 
-No repository ZIP and no local `src/` package install are required. The notebook downloads the public datasets directly at run time.
+## Steps
 
-## Reproducibility note
+1. Open Google Colab.
+2. Upload the notebook.
+3. Use a normal **Python CPU runtime**. No GPU is needed.
+4. Choose **Runtime → Run all**.
 
-Colab updates its preinstalled Python packages over time, so a last decimal can differ from the repository's validated environment. The exact CI environment is pinned in `requirements.txt`; the GitHub live-data workflow is the reference reproducibility run.
+The notebook downloads the public data directly from Our World in Data Grapher endpoints.
+
+No repository ZIP and no local `src/` package install are required.
+
+During the run, figures are saved under:
+
+`/content/climate_crop_figures/`
+
+and the notebook summary is saved under:
+
+`/content/climate_crop_tables/notebook_summary.json`
+
+If OWID changes an endpoint or schema later, the repository's **Live data validation** workflow is designed to catch that before a portfolio update is treated as validated.
