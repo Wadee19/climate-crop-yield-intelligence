@@ -35,9 +35,11 @@ def build_risk_table(
     df: pd.DataFrame,
     min_observations: int = 15,
 ) -> pd.DataFrame:
-    """Rank country-crop histories by volatility and negative detrended temp slope.
+    """Rank country-crop histories by detrended volatility and temperature penalty.
 
-    This is a descriptive prioritization score, not a causal climate-loss estimate.
+    Both components are built from residuals after removing the linear time trend
+    inside each country-crop history. This avoids treating a strong long-run yield
+    improvement as instability. The score is descriptive prioritization only.
     """
     detrended = add_detrended_residuals(
         df,
@@ -48,7 +50,7 @@ def build_risk_table(
         detrended.groupby(["Code", "Entity", "crop"])
         .agg(
             yield_mean=("yield_t_ha", "mean"),
-            yield_std=("yield_t_ha", "std"),
+            detrended_yield_std=("yield_detrended_t_ha", "std"),
             observations=("yield_t_ha", "size"),
         )
         .reset_index()
@@ -70,10 +72,12 @@ def build_risk_table(
 
     risk = base.merge(pd.DataFrame(rows), on=["Code", "crop"], how="inner")
     risk = risk[
-        (risk["observations"] >= min_observations) & (risk["yield_mean"] > 0)
+        (risk["observations"] >= min_observations)
+        & (risk["yield_mean"] > 0)
+        & risk["detrended_yield_std"].notna()
     ].copy()
 
-    risk["volatility_cv"] = risk["yield_std"] / risk["yield_mean"]
+    risk["volatility_cv"] = risk["detrended_yield_std"] / risk["yield_mean"]
     risk["warming_penalty"] = (-risk["temp_slope"]).clip(lower=0)
     risk["volatility_rank"] = risk["volatility_cv"].rank(pct=True)
     risk["warming_penalty_rank"] = risk["warming_penalty"].rank(pct=True)
