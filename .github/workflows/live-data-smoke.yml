@@ -7,6 +7,7 @@ on:
     paths:
       - "src/**"
       - "scripts/**"
+      - "notebooks/**"
       - "requirements.txt"
       - "pyproject.toml"
       - ".github/workflows/live-data-smoke.yml"
@@ -44,3 +45,14 @@ jobs:
           PY
       - name: Run full live analysis report
         run: python scripts/run_live_analysis.py
+      - name: Execute portfolio notebook end to end
+        env:
+          MPLBACKEND: Agg
+        run: |
+          mkdir -p /tmp/executed-notebook
+          jupyter nbconvert \
+            --to notebook \
+            --execute notebooks/01_climate_crop_yield_business_analysis.ipynb \
+            --output 01_climate_crop_yield_business_analysis.executed.ipynb \
+            --output-dir /tmp/executed-notebook \
+            --ExecutePreprocessor.timeout=900
