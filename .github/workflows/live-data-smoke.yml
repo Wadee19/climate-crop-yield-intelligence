@@ -1,0 +1,34 @@
+name: Live data smoke test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  live-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: pip install -e .
+      - name: Check public data endpoints and build panel
+        run: |
+          python - <<'PY'
+          from climate_crop_yield.data import build_analysis_panel
+          from climate_crop_yield.features import add_features, validate_panel
+
+          df = build_analysis_panel(start_year=1990, end_year=2023)
+          validate_panel(df)
+          df = add_features(df)
+
+          print("rows:", len(df))
+          print("countries:", df["Code"].nunique())
+          print("crops:", df["crop"].nunique())
+          print("years:", df["Year"].min(), df["Year"].max())
+
+          assert len(df) > 1000
+          assert df["crop"].nunique() == 6
+          assert df["Code"].nunique() > 30
+          PY
