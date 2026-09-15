@@ -8,9 +8,20 @@
 ![Version](https://img.shields.io/badge/version-v1.0-green.svg)
 ![Data](https://img.shields.io/badge/data-FAO%20%7C%20ERA5%20%7C%20World%20Bank-orange.svg)
 
-A business-first data science case study for an agribusiness client that wants to understand how **climate pressure and farm-management conditions relate to crop yield** — and which crop-location combinations deserve attention first.
+## What is this project?
 
-> **Business question:** Where do warmer-than-expected conditions and unstable yields appear together, and how much forecasting value do country-level climate variables add beyond simple historical baselines?
+This project studies one simple question:
+
+> **Which crops and countries look more exposed to climate pressure, and can climate data improve crop-yield forecasting?**
+
+I use real public data for **six crops** across **187 countries / territories** from **1990 to 2023**. The analysis combines crop yield, temperature, precipitation, fertilizer and irrigation data.
+
+The project has two goals:
+
+- find crop-location combinations that deserve attention first;
+- test whether annual climate information improves prediction beyond simple historical baselines.
+
+The main result is simple: climate variables add useful information, but **recent yield history is still the stronger short-term predictor** in this V1 model. The climate relationships in this project are treated as **associations, not causal effects**.
 
 ---
 
@@ -31,83 +42,71 @@ Crops in V1:
 
 `Wheat` · `Maize` · `Rice` · `Potatoes` · `Soybeans` · `Barley`
 
-All figures above are produced by the live-data GitHub Actions pipeline — not typed into the project before execution.
+The notebook was also run end-to-end in Google Colab with all outputs and figures saved.
+
+---
+
+## The story in three charts
+
+### 1. After removing long-term trends, hotter years are associated with lower yield
+
+![Detrended temperature sensitivity](reports/figures/03_temperature_sensitivity.svg)
+
+After detrending each country × crop history, all six pooled crop slopes are negative. The strongest associations are:
+
+- **Potatoes:** -0.2725 t/ha per +1°C
+- **Maize:** -0.1715 t/ha per +1°C
+
+These are descriptive associations, not causal temperature effects.
+
+### 2. Risk is local
+
+![Climate risk screen](reports/figures/07_risk_screen.svg)
+
+The risk screen combines:
+
+- detrended yield volatility;
+- a negative detrended temperature-yield association.
+
+The highest V1 priority segments are led by **Oman–Barley**, **Oman–Maize**, and **Rwanda–Potatoes**.
+
+This is a prioritization screen, not an insurance probability.
+
+### 3. The strongest baseline wins
+
+![Model vs baselines](reports/figures/08_model_vs_baselines.svg)
+
+The model trains on data before 2018 and is tested on 2018–2023.
+
+| 2018+ holdout | MAE, t/ha |
+|---|---:|
+| Persistence: last pre-2018 yield | **0.8976** |
+| Climate-anomaly residual model | **1.4472** |
+| Country × crop historical median | **1.6192** |
+| Crop median baseline | **3.4478** |
+
+The climate-anomaly model improves on the static country × crop median by **10.62%** and reaches **R² = 0.9038**.
+
+But persistence is clearly stronger.
+
+> **Main client message:** recent production history is more useful for short-horizon yield prediction than annual climate anomalies alone.
+
+That is a useful result, even though the more complicated model does not win.
 
 ---
 
 ## What I found
 
-### 1. Yield improved strongly, but not equally
-
-Comparing median yield in **1990–1994** with **2019–2023**:
-
-| Crop | Median yield change |
-|---|---:|
-| Maize | **+121.60%** |
-| Barley | +48.27% |
-| Potatoes | +47.00% |
-| Rice | +46.66% |
-| Wheat | +42.18% |
-| Soybeans | +28.67% |
-
-This is a production trend, not a climate effect. Technology, varieties, farm inputs and structural change can move yield at the same time as climate.
-
-### 2. Removing the time trend changes the climate story
-
-A raw temperature-yield relationship can be misleading because both temperature and agricultural productivity changed over time.
-
-So V1 removes the linear time trend **inside each country × crop history** before measuring interannual temperature-yield association.
-
-| Crop | Detrended yield association per +1°C |
-|---|---:|
-| Potatoes | **-0.2725 t/ha** |
-| Maize | **-0.1715 t/ha** |
-| Barley | -0.0765 t/ha |
-| Soybeans | -0.0752 t/ha |
-| Wheat | -0.0443 t/ha |
-| Rice | -0.0241 t/ha |
-
-All six pooled slopes are negative after detrending, but these are **descriptive associations, not causal temperature effects**.
-
-### 3. Climate exposure is local, not one global ranking
-
-The risk screen combines two detrended signals:
-
-- yield volatility around each country × crop's own long-run trend, and
-- a negative **detrended** temperature-yield association.
-
-Highest V1 priority segments include:
-
-| Priority | Country | Crop | Risk score | Detrended temp slope |
-|---:|---|---|---:|---:|
-| 1 | Oman | Barley | **0.9856** | -1.6709 |
-| 2 | Oman | Maize | **0.9856** | -1.5755 |
-| 3 | Rwanda | Potatoes | **0.9794** | -4.7536 |
-| 4 | Cameroon | Potatoes | **0.9760** | -2.9653 |
-| 5 | Paraguay | Potatoes | **0.9739** | -1.7113 |
-
-This score is a **prioritization tool**, not an insurance-grade risk estimate and not proof that temperature caused the yield changes.
-
-### 4. The ML result is useful because the strongest baseline wins
-
-The model trains on years **before 2018** and tests on **2018–2023**.
-
-Instead of comparing only with an easy global baseline, V1 uses three references:
-
-| 2018+ holdout | MAE, t/ha |
-|---|---:|
-| Crop median baseline | 3.4478 |
-| Country × crop historical median | 1.6192 |
-| Climate-anomaly residual model | **1.4473** |
-| Persistence: last pre-2018 yield | **0.8976** |
-
-The climate-anomaly model improves on the static country × crop median by **10.62%**, with **R² = 0.9038**.
-
-But the simple persistence baseline is substantially better. The model is **61.24% worse in MAE than persistence**.
-
-That is an important result, not something to hide: at this aggregation level, **recent production history is more useful for short-horizon yield prediction than annual climate and fertilizer anomalies alone**.
-
-Potatoes are also the hardest crop for the current model (MAE **3.8919 t/ha**), while soybeans have the lowest error (**0.4160 t/ha**).
+| Question | V1 result |
+|---|---|
+| Which crop improved most? | **Maize**, +121.6% median yield change |
+| Strongest negative detrended temperature association? | **Potatoes**, -0.2725 t/ha per +1°C |
+| Top risk-screen segment? | **Oman – Barley** |
+| Climate model MAE | **1.4472 t/ha** |
+| Model R² | **0.9038** |
+| Best forecasting baseline | **Persistence**, 0.8976 MAE |
+| Hardest crop for the model | **Potatoes**, ~3.89 t/ha MAE |
+| Lowest crop-level model error | **Soybeans**, ~0.42 t/ha MAE |
 
 ---
 
@@ -119,35 +118,33 @@ The project follows one decision story:
 
 **Business question → evidence → interpretation → limitation → client action**
 
-The rebuild also deliberately corrects shortcuts from the earlier university analysis:
+It also corrects several shortcuts from the earlier university analysis:
 
-| Old shortcut | V1 approach |
+| Earlier shortcut | V1 approach |
 |---|---|
 | Raw correlation = impact | Association is separated from causation |
 | One exact temperature = “best” | Temperature ranges / bins |
-| Compare hot countries with cold countries | Within-system climate deviations |
+| Compare naturally hot and cold countries | Within-country climate deviations |
 | Ignore long-term productivity trend | Country × crop detrending |
 | Random train/test split | Past → future time split |
 | One weak baseline | Crop median + country-crop median + persistence |
 | Use every available feature | Coverage decides whether a feature belongs in the core model |
-| Show only good model results | Error analysis and baseline failures are explicit |
-| Notebook-only project | Package + tests + CI + live-data validation + docs |
+| Show only good model results | Baseline failure and error analysis are explicit |
+| Notebook-only project | Notebook + package + tests + CI + live-data validation |
 
 ---
 
 ## Data
 
-The project uses public data from established sources, accessed through reproducible Our World in Data Grapher CSV endpoints.
+The notebook downloads public data directly from reproducible Our World in Data Grapher CSV endpoints.
 
-- **Crop yields:** FAO Production: Crops and livestock products.
-- **Temperature & precipitation:** Copernicus Climate Change Service / ERA5.
-- **Fertilizer & irrigation:** FAO / World Bank indicator series.
+- **Crop yields:** FAO Production: Crops and livestock products
+- **Temperature & precipitation:** Copernicus Climate Change Service / ERA5
+- **Fertilizer & irrigation:** FAO / World Bank indicator series
 
-Only ISO-3 country/territory rows are retained; OWID regional aggregates such as `OWID_AFR` and `OWID_WRL` are excluded from the country panel.
+Only ISO-3 country / territory rows are kept. OWID regional aggregates such as `OWID_AFR` and `OWID_WRL` are excluded.
 
-Raw third-party datasets are downloaded at runtime and are **not committed** to this repository.
-
-Irrigation is useful for exploratory analysis, but only **22.64%** of the final panel has an observed irrigation value. For that reason it is intentionally **excluded from the core predictive model** instead of being mostly imputed.
+Irrigation has only **22.64%** observed coverage in the final panel, so it is used for exploratory analysis only and is deliberately excluded from the core predictive model.
 
 See [`docs/data_sources.md`](docs/data_sources.md) and [`docs/methodology.md`](docs/methodology.md).
 
@@ -156,40 +153,55 @@ See [`docs/data_sources.md`](docs/data_sources.md) and [`docs/methodology.md`](d
 ## Business questions
 
 1. Which crops improved the most since 1990?
-2. What happens after removing the long-run yield and warming trends?
-3. Which crops show the strongest negative interannual temperature association?
-4. Is there really one “perfect temperature” for yield?
+2. What happens in warmer-than-trend years?
+3. Which crops look most temperature sensitive?
+4. Is there really one “perfect temperature”?
 5. Does more precipitation always mean better yield?
-6. What can irrigation and fertilizer tell us — and where is coverage too weak?
-7. Which country-crop combinations combine detrended volatility with negative temperature association?
-8. Can a model trained on the past beat strong historical baselines on 2018+ data?
+6. What do irrigation and fertilizer tell us?
+7. Which country-crop combinations deserve investigation first?
+8. Can climate information beat strong forecasting baselines?
 9. Where does the model fail?
 
 ---
 
 ## Modeling design
 
-The predictive task is intentionally different from the descriptive climate analysis.
-
 **Train:** 1990–2017  
 **Test:** 2018–2023
 
 The model starts from each country × crop's historical training-period yield level and predicts a residual correction using:
 
-- temperature anomaly relative to the **training-period** country normal,
-- precipitation anomaly relative to the **training-period** country normal,
-- fertilizer anomaly relative to the **training-period** country normal,
+- temperature anomaly relative to the training-period country normal;
+- precipitation anomaly relative to the training-period country normal;
+- fertilizer anomaly relative to the training-period country normal;
 - crop identity.
 
-Using train-only normals prevents future climate information from leaking into the model.
+Train-only normals prevent future climate information from leaking into the model.
 
-The result is compared with:
+The Random Forest uses:
 
-1. crop median,
-2. country × crop historical median,
-3. last observed pre-2018 yield (persistence).
+- **250 trees** — enough for a stable ensemble without making this project unnecessarily heavy;
+- **min_samples_leaf = 5** — smooths noisy leaf rules;
+- **random_state = 42** — reproducibility.
 
-The persistence comparison is the hardest and most decision-relevant baseline in V1.
+These parameters were **not tuned against the 2018+ test set**.
+
+---
+
+## Notebook
+
+The main notebook is:
+
+[`notebooks/01_climate_crop_yield_business_analysis.ipynb`](notebooks/01_climate_crop_yield_business_analysis.ipynb)
+
+It is self-contained for portfolio use:
+
+- imports the public datasets directly;
+- explains important parameter choices in simple language;
+- saves the main figures during the run;
+- runs without requiring the local `src/` package.
+
+The notebook was verified end-to-end in Google Colab. The repository keeps a clean runnable notebook, while the README shows the validated portfolio visuals.
 
 ---
 
@@ -214,8 +226,6 @@ climate-crop-yield-intelligence/
 │   └── tables/
 ├── scripts/
 │   └── run_live_analysis.py
-├── slides/
-│   └── presentation_story.md
 ├── src/climate_crop_yield/
 │   ├── analysis.py
 │   ├── data.py
@@ -235,7 +245,12 @@ climate-crop-yield-intelligence/
 
 ### Google Colab
 
-Open `notebooks/01_climate_crop_yield_business_analysis.ipynb` with the repository available, install the requirements, then **Run all**.
+1. Open `notebooks/01_climate_crop_yield_business_analysis.ipynb`.
+2. Upload the notebook to Colab.
+3. Use a normal **Python CPU runtime**.
+4. Run all cells from top to bottom.
+
+No repository ZIP or local package install is required. The notebook downloads the public datasets at run time.
 
 ### Local
 
@@ -258,23 +273,23 @@ Running `python scripts/run_live_analysis.py` also writes a machine-readable sum
 Two workflows protect the project:
 
 - **CI** — runs the offline test suite on every push / pull request.
-- **Live data validation** — downloads the real public datasets, rebuilds the analysis panel, runs the full live analysis report, executes the portfolio notebook end to end, and uploads both the executed notebook and `live_analysis_summary.json` as the `validated-live-analysis` artifact.
+- **Live data validation** — downloads the real public datasets, rebuilds the analysis panel, runs the full live analysis report, executes the portfolio notebook end to end, and uploads validated artifacts.
 
 ---
 
-## What V1 does *not* claim
+## What V1 does not claim
 
-This project does **not** claim that temperature, precipitation, fertilizer or irrigation *cause* the observed yield changes.
+This project does **not** claim that temperature, precipitation, fertilizer or irrigation cause the observed yield changes.
 
 Country-level annual data cannot directly capture:
 
-- growing-season heat extremes,
-- rainfall timing,
-- soil and field conditions,
-- planting dates,
-- cultivar choice,
-- irrigation efficiency,
-- local management quality,
+- growing-season heat extremes;
+- rainfall timing;
+- soil and field conditions;
+- planting dates;
+- cultivar choice;
+- irrigation efficiency;
+- local management quality;
 - prices and policy changes.
 
 The risk score is a screening tool, and the predictive model is a country-level decision-support baseline — not a farm-level forecasting system.
@@ -283,7 +298,7 @@ The risk score is a screening tool, and the predictive model is a country-level 
 
 ## Presentation
 
-The portfolio presentation is designed as a client story rather than a classroom report:
+The portfolio presentation story is:
 
 ### **From Warming to Yield — Where Climate Risk Hits Agriculture First**
 

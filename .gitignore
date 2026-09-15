@@ -11,4 +11,7 @@ reports/tables/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !reports/figures/.gitkeep
+!reports/figures/03_temperature_sensitivity.svg
+!reports/figures/07_risk_screen.svg
+!reports/figures/08_model_vs_baselines.svg
 !reports/tables/.gitkeep
