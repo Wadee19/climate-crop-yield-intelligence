@@ -56,12 +56,14 @@ jobs:
           MPLBACKEND: Agg
         run: |
           mkdir -p /tmp/executed-notebook
+          cp notebooks/01_climate_crop_yield_business_analysis.ipynb ./_portfolio_notebook.ipynb
           jupyter nbconvert \
             --to notebook \
-            --execute notebooks/01_climate_crop_yield_business_analysis.ipynb \
+            --execute ./_portfolio_notebook.ipynb \
             --output 01_climate_crop_yield_business_analysis.executed.ipynb \
             --output-dir /tmp/executed-notebook \
             --ExecutePreprocessor.timeout=900
+          rm -f ./_portfolio_notebook.ipynb
 
       - name: Check notebook and package headline parity
         run: |
@@ -78,7 +80,6 @@ jobs:
 
           live_changes = {r["crop"]: r["change_pct"] for r in live["matched_country_yield_change"]}
           assert nb["matched_country_yield_change"] == live_changes
-
           assert nb["relative_temperature_sensitivity_pct_per_1c"] == live["relative_temperature_sensitivity_pct_per_1c"]
 
           top = live["top_screening_segments"][0]
