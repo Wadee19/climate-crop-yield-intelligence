@@ -1,5 +1,8 @@
 name: Live data validation
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
   push:
@@ -100,6 +103,59 @@ jobs:
 
           print("NOTEBOOK_PACKAGE_PARITY=PASS")
           PY
+
+      - name: Refresh validated portfolio figures and portable notebook paths
+        if: github.ref == 'refs/heads/main'
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import nbformat
+
+          path = Path("notebooks/01_climate_crop_yield_business_analysis.ipynb")
+          nb = nbformat.read(str(path), as_version=4)
+
+          old_import = "from pathlib import Path\nimport io,json,warnings,requests,numpy as np,pandas as pd,matplotlib.pyplot as plt,seaborn as sns"
+          new_import = "from pathlib import Path\nimport sys,io,json,warnings,requests,numpy as np,pandas as pd,matplotlib.pyplot as plt,seaborn as sns"
+          old_paths = 'IN_REPO=Path("reports").exists(); FIG_DIR=Path("reports/figures") if IN_REPO else Path("/content/climate_crop_figures"); TABLE_DIR=Path("reports/tables") if IN_REPO else Path("/content/climate_crop_tables")\nFIG_DIR.mkdir(parents=True,exist_ok=True); TABLE_DIR.mkdir(parents=True,exist_ok=True)'
+          new_paths = "\n".join([
+              'IS_COLAB = "google.colab" in sys.modules',
+              'ROOT = Path.cwd()',
+              'if ROOT.name == "notebooks":',
+              '    ROOT = ROOT.parent',
+              'FIG_DIR = Path("/content/climate_crop_figures") if IS_COLAB else ROOT / "reports" / "figures"',
+              'TABLE_DIR = Path("/content/climate_crop_tables") if IS_COLAB else ROOT / "reports" / "tables"',
+              'FIG_DIR.mkdir(parents=True, exist_ok=True)',
+              'TABLE_DIR.mkdir(parents=True, exist_ok=True)',
+          ])
+
+          changed = False
+          for cell in nb.cells:
+              if cell.cell_type != "code":
+                  continue
+              if old_import in cell.source:
+                  cell.source = cell.source.replace(old_import, new_import)
+                  changed = True
+              if old_paths in cell.source:
+                  cell.source = cell.source.replace(old_paths, new_paths)
+                  changed = True
+
+          if changed:
+              nbformat.write(nb, str(path))
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add notebooks/01_climate_crop_yield_business_analysis.ipynb
+          git add -f reports/figures/01_matched_yield_change.png
+          git add -f reports/figures/03_temperature_sensitivity_relative.png
+          git add -f reports/figures/08_model_ablation_baselines.png
+
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: refresh validated portfolio outputs"
+            git push
+          else
+            echo "Validated portfolio files already current."
+          fi
 
       - name: Upload validated portfolio artifacts
         uses: actions/upload-artifact@v4
