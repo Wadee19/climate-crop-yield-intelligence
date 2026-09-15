@@ -1,13 +1,13 @@
 # Presentation Story
-## From Warming to Yield — Where Climate Risk Hits Agriculture First
+## From Warming to Yield — Where Climate Pressure Appears First
 
 ### Slide 1 — The Business Problem
-**Visual:** one strong crop/climate image + one sentence.
+**Visual:** one crop/climate image + one sentence.
 
-A global agribusiness client needs to know which crop-location combinations deserve attention first under climate pressure — and whether climate variables improve short-horizon yield prediction enough to support decisions.
+This is an agribusiness decision case study. I want to know which crop-location combinations deserve attention first, and whether annual climate information improves short-horizon yield prediction.
 
 ### Slide 2 — The Data Backbone
-**Visual:** 4-source pipeline + coverage numbers.
+**Visual:** source pipeline + coverage numbers.
 
 FAO crop yields → ERA5 temperature / precipitation → fertilizer → irrigation → country-year-crop panel.
 
@@ -19,108 +19,111 @@ Validated V1 panel:
 - yield coverage: **100%**
 - temperature / precipitation: **97.59%**
 - fertilizer: **97.15%**
-- irrigation: only **22.64%**
+- irrigation: **22.64%**
 
-**Takeaway:** irrigation stays exploratory because most rows do not have an observed value.
+**Decision:** irrigation stays exploratory because most rows do not have an observed value.
 
-### Slide 3 — Six Crops, Very Different Production Trends
-**Visual:** small multiples or indexed crop-yield trend chart.
+### Slide 3 — Yield Changed a Lot, So I Matched the Same Countries
+**Visual:** `01_matched_yield_change.png`.
 
-Median yield change from 1990–1994 to 2019–2023:
-- Maize: **+121.60%**
-- Barley: **+48.27%**
-- Potatoes: **+47.00%**
-- Rice: **+46.66%**
-- Wheat: **+42.18%**
-- Soybeans: **+28.67%**
+Median yield change from 1990–1994 to 2019–2023, using the same country cohort in both windows:
+- Maize: **+106.75%**
+- Rice: **+52.40%**
+- Potatoes: **+50.06%**
+- Barley: **+48.59%**
+- Wheat: **+38.51%**
+- Soybeans: **+18.02%**
 
-**Takeaway:** long-run productivity changed a lot, so raw climate-yield correlation is not enough.
+**Why:** I did not want changing country coverage to look like production growth.
 
-### Slide 4 — Removing the Time Trend Changes the Climate Story
-**Visual:** detrended crop sensitivity bar chart.
+### Slide 4 — I Normalized the Temperature Comparison
+**Visual:** `03_temperature_sensitivity_relative.png`.
 
-After removing the linear time trend within each country × crop history, all six pooled annual temperature associations are negative:
-- Potatoes: **-0.2725 t/ha per +1°C**
-- Maize: **-0.1715**
-- Barley: **-0.0765**
-- Soybeans: **-0.0752**
-- Wheat: **-0.0443**
-- Rice: **-0.0241**
+After removing the linear time trend inside each country × crop history, the relative annual temperature associations are:
+- Maize: **-4.41% yield per +1°C**
+- Soybeans: **-4.38%**
+- Barley: **-3.59%**
+- Wheat: **-2.39%**
+- Potatoes: **-1.47%**
+- Rice: **-0.95%**
 
-**Takeaway:** warmer-than-trend years tend to align with lower-than-trend yield in this country-level panel, but this is still association — not causal proof.
+**Why:** raw `t/ha per °C` was not a fair cross-crop comparison because crop yield scales are very different.
+
+**Takeaway:** all six pooled associations are negative, but they remain observational and non-causal.
 
 ### Slide 5 — There Is No Magic Temperature
-**Visual:** temperature-bin yield chart.
+**Visual:** crop-specific temperature ranges.
 
-The earlier university analysis selected one exact observed temperature as the “best”. V1 replaces that with ranges and a more cautious interpretation.
+I use broad temperature groups inside each crop instead of selecting one exact observed degree and calling it the optimum.
 
-**Takeaway:** one sparse continuous observation should not be presented as a physiological optimum.
+**Why:** I want an exploratory view, not a fake physiological threshold.
 
-### Slide 6 — Water and Management Change the Story
-**Visual:** precipitation response + fertilizer groups + irrigation coverage callout.
+### Slide 6 — Management Data Are Useful, but Coverage Matters
+**Visual:** normalized management groups + irrigation coverage callout.
 
-Climate and management variables are useful context, but their data quality is not equal. Irrigation has only **22.64%** coverage and is excluded from the core model rather than being mostly imputed.
+Irrigation has only **22.64%** coverage, so I keep it out of the core prediction model.
 
-**Takeaway:** feature selection is partly a data-quality decision, not just a modeling decision.
+**Why:** mostly imputing a weakly observed variable would make the model look more complete than the evidence is.
 
-### Slide 7 — The Risk Matrix
-**Visual:** 2D matrix: detrended warming penalty × detrended yield volatility.
+### Slide 7 — Where Should I Investigate First?
+**Visual:** screening scatter or top-five table.
 
-Highest V1 priority segments:
-1. **Oman × Barley — 0.9856**
-2. **Oman × Maize — 0.9856**
-3. **Rwanda × Potatoes — 0.9794**
-4. **Cameroon × Potatoes — 0.9760**
-5. **Paraguay × Potatoes — 0.9739**
+Highest corrected V1 screening segments:
+1. **Oman × Barley — 0.9930**
+2. **Turkmenistan × Maize — 0.9916**
+3. **Cape Verde × Maize — 0.9839**
+4. **Malawi × Wheat — 0.9832**
+5. **Rwanda × Potatoes — 0.9783**
 
-The volatility component is calculated around each country × crop's own long-run yield trend, so sustained improvement is not mistaken for instability.
+The screen combines detrended yield volatility with negative relative temperature association and requires at least **20 usable observations**.
 
-**Takeaway:** this is a screening score for where to investigate first, not an insurance-grade probability of loss.
+**Takeaway:** this is a priority screen, not a crop-loss probability.
 
-### Slide 8 — Can Climate Features Beat Strong Historical Baselines?
-**Visual:** four-bar MAE comparison.
+### Slide 8 — I Separated Climate Value from Fertilizer Value
+**Visual:** `08_model_ablation_baselines.png`.
 
 Train: **1990–2017**  
 Test: **2018–2023**
 
 MAE:
-- Crop median: **3.4478 t/ha**
+- Persistence: **0.8976 t/ha**
+- Climate + fertilizer: **1.4473**
+- Climate only: **1.4816**
 - Country × crop historical median: **1.6192**
-- Climate-anomaly residual model: **1.4473**
-- Persistence, last pre-2018 yield: **0.8976**
+- Crop median: **3.4478**
 
-Model R²: **0.9038**
+Climate-only improves on the country × crop median by **8.50%**. Fertilizer adds a further **2.32%** improvement relative to climate-only. Full-model R² is **0.9038**.
 
-**Takeaway:** the model improves on the static country × crop median by **10.62%**, but is **61.24% worse than persistence**.
+**Takeaway:** climate adds signal, fertilizer adds a little more, but persistence still wins.
 
 ### Slide 9 — The Failure Is Part of the Result
 **Visual:** error by crop.
 
-The climate-anomaly model does not beat the strongest simple baseline.
-
-Crop MAE examples:
-- Potatoes: **3.8919 t/ha** — hardest crop
+Full-model mean absolute error by crop:
+- Potatoes: **3.8919 t/ha**
 - Maize: **1.3076**
 - Rice: **0.7826**
 - Barley: **0.7132**
 - Wheat: **0.6420**
-- Soybeans: **0.4160** — lowest error
+- Soybeans: **0.4160**
 
-**Takeaway:** recent production history carries more short-horizon predictive information than annual country-level climate and fertilizer anomalies alone.
+**Takeaway:** recent production history carries more short-horizon predictive information than these annual country-level features alone.
 
-### Slide 10 — Client Action
+### Slide 10 — What I Would Do Next
 **Visual:** 3-step decision playbook.
 
-1. Prioritize the highest-risk country-crop segments for deeper review.
-2. Add local growing-season, heat-extreme, rainfall-timing and farm-management data before operational decisions.
+1. Investigate the highest screening segments with local agronomic context.
+2. Add growing-season heat extremes, rainfall timing, crop calendars and more local management data.
 3. Keep persistence as the minimum forecasting benchmark; only deploy a more complex model when it beats that benchmark consistently.
 
 ### Validation / Reproducibility Footer
-The live GitHub Actions workflow rebuilds the public-data panel, runs the analysis, executes the portfolio notebook end to end, and uploads:
-- the executed notebook, and
-- `live_analysis_summary.json`
-
-as the `validated-live-analysis` artifact.
+The live GitHub Actions workflow:
+- rebuilds the public-data panel;
+- runs the package analysis;
+- generates the validated figures;
+- executes the standalone notebook end to end;
+- checks notebook/package headline parity;
+- uploads the summaries, figures and executed notebook as artifacts.
 
 ### Final line
-**Climate risk cannot be removed, but it can be measured earlier, tested honestly and prioritized better.**
+**Climate pressure can be screened more carefully, and a simple baseline can still be the right benchmark.**
