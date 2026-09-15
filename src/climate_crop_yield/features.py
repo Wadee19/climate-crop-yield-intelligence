@@ -31,27 +31,42 @@ def validate_panel(df: pd.DataFrame) -> None:
         raise ValueError("Yield cannot be negative")
 
 
+def _country_climate_normals(df: pd.DataFrame) -> pd.DataFrame:
+    """Country climate means using one observation per country-year, not one per crop."""
+    climate = (
+        df[["Code", "Year", "temperature_c", "precipitation_mm"]]
+        .drop_duplicates(["Code", "Year"])
+        .copy()
+    )
+    return climate.groupby("Code")[["temperature_c", "precipitation_mm"]].mean()
+
+
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add interpretable climate and yield features without leaking future values."""
+    """Add descriptive features for EDA.
+
+    Climate deviations here use the full analysis period and are therefore descriptive,
+    not predictive features. The predictive model calculates its own train-only normals.
+    """
     validate_panel(df)
     out = df.copy()
 
-    country_temp_mean = out.groupby("Code")["temperature_c"].transform("mean")
-    country_rain_mean = out.groupby("Code")["precipitation_mm"].transform("mean")
+    normals = _country_climate_normals(out)
+    temp_normal = out["Code"].map(normals["temperature_c"])
+    rain_normal = out["Code"].map(normals["precipitation_mm"])
 
-    out["temp_deviation_c"] = out["temperature_c"] - country_temp_mean
-    out["precip_deviation_mm"] = out["precipitation_mm"] - country_rain_mean
+    out["temp_deviation_c"] = out["temperature_c"] - temp_normal
+    out["precip_deviation_mm"] = out["precipitation_mm"] - rain_normal
 
     out["yield_log1p"] = np.log1p(out["yield_t_ha"].clip(lower=0))
 
-    out["yield_yoy_pct"] = (
-        out.sort_values(["Code", "crop", "Year"])
-        .groupby(["Code", "crop"])["yield_t_ha"]
+    ordered = out.sort_values(["Code", "crop", "Year"])
+    yoy = (
+        ordered.groupby(["Code", "crop"])["yield_t_ha"]
         .pct_change(fill_method=None)
         .mul(100)
     )
+    out["yield_yoy_pct"] = yoy.reindex(out.index)
 
-    # Winsorize only for plotting / descriptive stability.
     if out["yield_yoy_pct"].notna().any():
         lo, hi = out["yield_yoy_pct"].quantile([0.01, 0.99])
         out["yield_yoy_pct_w"] = out["yield_yoy_pct"].clip(lo, hi)
@@ -76,14 +91,25 @@ def add_temperature_bins(df: pd.DataFrame, bins: int = 8) -> pd.DataFrame:
 
 
 def crop_temperature_sensitivity(df: pd.DataFrame) -> pd.DataFrame:
-    """Simple within-crop slope: yield ~ country-centered temperature deviation."""
+    """Descriptive within-country×crop temperature sensitivity.
+
+    Both temperature and yield are demeaned inside each country-crop history before
+    pooling by crop. This removes persistent country/crop yield-level differences and
+    makes the slope describe warmer-than-usual years within the same production system.
+    """
+    work = df.dropna(subset=["yield_t_ha", "temperature_c"]).copy()
+    groups = work.groupby(["Code", "crop"])
+    work["temp_within_c"] = work["temperature_c"] - groups["temperature_c"].transform("mean")
+    work["yield_within_t_ha"] = work["yield_t_ha"] - groups["yield_t_ha"].transform("mean")
+
     rows = []
-    for crop, part in df.dropna(subset=["yield_t_ha", "temp_deviation_c"]).groupby("crop"):
-        if len(part) < 20 or part["temp_deviation_c"].nunique() < 3:
+    for crop, part in work.groupby("crop"):
+        part = part.dropna(subset=["temp_within_c", "yield_within_t_ha"])
+        if len(part) < 20 or part["temp_within_c"].nunique() < 3:
             continue
 
-        x = part["temp_deviation_c"].to_numpy(float)
-        y = part["yield_t_ha"].to_numpy(float)
+        x = part["temp_within_c"].to_numpy(float)
+        y = part["yield_within_t_ha"].to_numpy(float)
         slope = np.polyfit(x, y, deg=1)[0]
         rows.append(
             {

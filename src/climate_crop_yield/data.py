@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Iterable
 
 import pandas as pd
@@ -43,10 +42,14 @@ def _value_column(df: pd.DataFrame) -> str:
     return candidates[0]
 
 
+def _country_code_mask(codes: pd.Series) -> pd.Series:
+    """Keep ISO-3 country codes and reject OWID aggregate codes such as OWID_AFR."""
+    return codes.astype("string").str.fullmatch(r"[A-Z]{3}", na=False)
+
+
 def read_owid_series(slug: str, value_name: str) -> pd.DataFrame:
-    """Download one OWID Grapher series and return a standard country-year frame."""
+    """Download one OWID Grapher series and return a country-year frame."""
     url = owid_csv_url(slug)
-    # User-Agent avoids occasional blocking on notebook environments.
     df = pd.read_csv(
         url,
         storage_options={"User-Agent": "climate-crop-yield-intelligence/1.0"},
@@ -55,8 +58,9 @@ def read_owid_series(slug: str, value_name: str) -> pd.DataFrame:
     df = df.rename(columns={value_col: value_name})
     df = df[["Entity", "Code", "Year", value_name]].copy()
 
-    # keep country rows only; aggregate regions usually have no ISO3 code
-    df = df[df["Code"].notna()].copy()
+    # OWID also publishes aggregates with codes such as OWID_AFR / OWID_WRL.
+    # The analysis unit is country-year-crop, so only true ISO-3 rows belong here.
+    df = df[_country_code_mask(df["Code"])].copy()
     df["Year"] = pd.to_numeric(df["Year"], errors="coerce")
     df = df.dropna(subset=["Year"])
     df["Year"] = df["Year"].astype(int)

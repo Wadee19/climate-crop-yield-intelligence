@@ -10,13 +10,30 @@ def fixture_model_panel():
         for crop, base in [("Wheat", 3.0), ("Maize", 5.0)]:
             for year in range(2005, 2023):
                 t = temp + 0.05 * (year - 2005)
-                rows.append({"Entity": code, "Code": code, "Year": year, "crop": crop, "yield_t_ha": base + 0.03 * (year - 2005) - 0.02 * (t-temp), "temperature_c": t, "precipitation_mm": 500 + (year % 5) * 10, "fertilizer_kg_ha": 100 + (year - 2005), "irrigated_land_pct": 30 + (year % 4)})
+                rows.append(
+                    {
+                        "Entity": code,
+                        "Code": code,
+                        "Year": year,
+                        "crop": crop,
+                        "yield_t_ha": base + 0.03 * (year - 2005) - 0.02 * (t - temp),
+                        "temperature_c": t,
+                        "precipitation_mm": 500 + (year % 5) * 10,
+                        "fertilizer_kg_ha": 100 + (year - 2005),
+                        "irrigated_land_pct": 30 + (year % 4),
+                    }
+                )
     return pd.DataFrame(rows)
 
 
-def test_time_split_model_runs():
+def test_time_split_model_runs_and_reports_strong_baselines():
     df = add_features(fixture_model_panel())
     result = fit_time_split(df, split_year=2018, random_state=1)
+
     assert result.metrics["mae"] >= 0
+    assert result.metrics["persistence_mae"] >= 0
+    assert result.metrics["country_crop_median_mae"] >= 0
     assert len(result.predictions) > 0
     assert result.predictions["Year"].min() >= 2018
+    assert "historical_country_crop_yield_t_ha" in result.predictions
+    assert "predicted_residual_t_ha" in result.predictions

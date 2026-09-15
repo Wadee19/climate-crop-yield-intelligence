@@ -12,18 +12,18 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 
 
-# Irrigation is intentionally excluded from the core model because the live
-# country-year panel has low coverage for this feature. It remains useful for
-# descriptive analysis on the observed subset.
-NUMERIC_FEATURES = [
+MODEL_NUMERIC_FEATURES = [
+    "temp_anomaly_c",
+    "precip_anomaly_mm",
+    "fertilizer_anomaly_kg_ha",
+]
+MODEL_CATEGORICAL_FEATURES = ["crop"]
+
+SOURCE_FEATURES = [
     "temperature_c",
-    "temp_deviation_c",
     "precipitation_mm",
-    "precip_deviation_mm",
     "fertilizer_kg_ha",
 ]
-
-CATEGORICAL_FEATURES = ["crop", "Code"]
 
 
 @dataclass
@@ -54,14 +54,14 @@ def build_model(random_state: int = 42) -> Pipeline:
 
     pre = ColumnTransformer(
         transformers=[
-            ("num", numeric, NUMERIC_FEATURES),
-            ("cat", categorical, CATEGORICAL_FEATURES),
+            ("num", numeric, MODEL_NUMERIC_FEATURES),
+            ("cat", categorical, MODEL_CATEGORICAL_FEATURES),
         ]
     )
 
     reg = RandomForestRegressor(
-        n_estimators=300,
-        min_samples_leaf=3,
+        n_estimators=250,
+        min_samples_leaf=5,
         random_state=random_state,
         n_jobs=-1,
     )
@@ -75,20 +75,31 @@ def _safe_improvement(model_mae: float, baseline_mae: float) -> float:
     return float(100 * (baseline_mae - model_mae) / baseline_mae)
 
 
+def _map_group_values(
+    frame: pd.DataFrame,
+    values: pd.Series,
+) -> np.ndarray:
+    keys = pd.MultiIndex.from_frame(frame[["Code", "crop"]])
+    return values.reindex(keys).to_numpy(dtype=float)
+
+
 def _baseline_predictions(
     train: pd.DataFrame,
     test: pd.DataFrame,
-) -> dict[str, np.ndarray]:
-    """Create progressively stronger, time-safe baselines from training data only."""
+) -> tuple[dict[str, np.ndarray], np.ndarray]:
+    """Create time-safe baselines and the training country-crop reference level."""
     global_median = float(train["yield_t_ha"].median())
 
     crop_medians = train.groupby("crop")["yield_t_ha"].median()
-    crop_pred = test["crop"].map(crop_medians).fillna(global_median).to_numpy()
+    crop_test = test["crop"].map(crop_medians).fillna(global_median).to_numpy()
+    crop_train = train["crop"].map(crop_medians).fillna(global_median).to_numpy()
 
     country_crop_medians = train.groupby(["Code", "crop"])["yield_t_ha"].median()
-    cc_keys = pd.MultiIndex.from_frame(test[["Code", "crop"]])
-    cc_pred = country_crop_medians.reindex(cc_keys).to_numpy(dtype=float)
-    cc_pred = np.where(np.isnan(cc_pred), crop_pred, cc_pred)
+    cc_test = _map_group_values(test, country_crop_medians)
+    cc_test = np.where(np.isnan(cc_test), crop_test, cc_test)
+
+    cc_train = _map_group_values(train, country_crop_medians)
+    cc_train = np.where(np.isnan(cc_train), crop_train, cc_train)
 
     last_rows = (
         train.sort_values(["Code", "crop", "Year"])
@@ -96,14 +107,46 @@ def _baseline_predictions(
         .tail(1)
         .set_index(["Code", "crop"])["yield_t_ha"]
     )
-    persistence_pred = last_rows.reindex(cc_keys).to_numpy(dtype=float)
-    persistence_pred = np.where(np.isnan(persistence_pred), cc_pred, persistence_pred)
+    persistence = _map_group_values(test, last_rows)
+    persistence = np.where(np.isnan(persistence), cc_test, persistence)
 
-    return {
-        "crop_median": crop_pred,
-        "country_crop_median": cc_pred,
-        "persistence": persistence_pred,
+    return (
+        {
+            "crop_median": crop_test,
+            "country_crop_median": cc_test,
+            "persistence": persistence,
+        },
+        cc_train,
+    )
+
+
+def _add_train_based_anomalies(
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Create climate/input anomalies using training-period country normals only."""
+    unique_train = (
+        train[["Code", "Year"] + SOURCE_FEATURES]
+        .drop_duplicates(["Code", "Year"])
+        .copy()
+    )
+    normals = unique_train.groupby("Code")[SOURCE_FEATURES].mean()
+    global_normals = unique_train[SOURCE_FEATURES].mean()
+
+    names = {
+        "temperature_c": "temp_anomaly_c",
+        "precipitation_mm": "precip_anomaly_mm",
+        "fertilizer_kg_ha": "fertilizer_anomaly_kg_ha",
     }
+
+    def transform(frame: pd.DataFrame) -> pd.DataFrame:
+        out = frame.copy()
+        for source, target in names.items():
+            normal = out["Code"].map(normals[source]).fillna(global_normals[source])
+            out[target] = out[source] - normal
+        return out
+
+    return transform(train), transform(test)
 
 
 def fit_time_split(
@@ -111,42 +154,46 @@ def fit_time_split(
     split_year: int = 2018,
     random_state: int = 42,
 ) -> ModelResult:
-    needed = set(NUMERIC_FEATURES + CATEGORICAL_FEATURES + ["yield_t_ha", "Year"])
+    needed = set(SOURCE_FEATURES + ["crop", "Code", "yield_t_ha", "Year"])
     missing = needed - set(df.columns)
     if missing:
         raise ValueError(f"Missing modeling columns: {sorted(missing)}")
 
     model_df = df.dropna(subset=["yield_t_ha"]).copy()
-
     train = model_df[model_df["Year"] < split_year].copy()
     test = model_df[model_df["Year"] >= split_year].copy()
 
     if train.empty or test.empty:
         raise ValueError("Time split produced an empty train or test set")
 
-    X_train = train[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
-    y_train = train["yield_t_ha"]
-    X_test = test[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
-    y_test = test["yield_t_ha"]
+    baselines, train_reference = _baseline_predictions(train, test)
+    train, test = _add_train_based_anomalies(train, test)
 
-    baselines = _baseline_predictions(train, test)
+    X_train = train[MODEL_NUMERIC_FEATURES + MODEL_CATEGORICAL_FEATURES]
+    X_test = test[MODEL_NUMERIC_FEATURES + MODEL_CATEGORICAL_FEATURES]
+
+    # Learn only the deviation from the historical country-crop yield level.
+    y_train_residual = train["yield_t_ha"].to_numpy() - train_reference
+
+    model = build_model(random_state=random_state)
+    model.fit(X_train, y_train_residual)
+    residual_pred = model.predict(X_test)
+    pred = baselines["country_crop_median"] + residual_pred
+
+    y_test = test["yield_t_ha"].to_numpy()
+    model_mae = float(mean_absolute_error(y_test, pred))
     baseline_maes = {
         name: float(mean_absolute_error(y_test, values))
         for name, values in baselines.items()
     }
 
-    model = build_model(random_state=random_state)
-    model.fit(X_train, y_train)
-    pred = model.predict(X_test)
-    model_mae = float(mean_absolute_error(y_test, pred))
-
     pred_df = test[["Entity", "Code", "Year", "crop", "yield_t_ha"]].copy()
-    pred_df["predicted_yield_t_ha"] = pred
+    pred_df["historical_country_crop_yield_t_ha"] = baselines["country_crop_median"]
     pred_df["persistence_yield_t_ha"] = baselines["persistence"]
-    pred_df["abs_error"] = (pred_df["yield_t_ha"] - pred_df["predicted_yield_t_ha"]).abs()
-    pred_df["persistence_abs_error"] = (
-        pred_df["yield_t_ha"] - pred_df["persistence_yield_t_ha"]
-    ).abs()
+    pred_df["predicted_yield_t_ha"] = pred
+    pred_df["predicted_residual_t_ha"] = residual_pred
+    pred_df["abs_error"] = np.abs(y_test - pred)
+    pred_df["persistence_abs_error"] = np.abs(y_test - baselines["persistence"])
 
     metrics = {
         "model_mae": model_mae,
