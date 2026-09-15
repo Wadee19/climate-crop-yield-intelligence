@@ -2,6 +2,13 @@ name: Live data smoke test
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - ".github/workflows/live-data-smoke.yml"
 
 jobs:
   live-data:
@@ -23,10 +30,12 @@ jobs:
           validate_panel(df)
           df = add_features(df)
 
-          print("rows:", len(df))
-          print("countries:", df["Code"].nunique())
-          print("crops:", df["crop"].nunique())
-          print("years:", df["Year"].min(), df["Year"].max())
+          print("LIVE_DATA_ROWS=", len(df))
+          print("LIVE_DATA_COUNTRIES=", df["Code"].nunique())
+          print("LIVE_DATA_CROPS=", df["crop"].nunique())
+          print("LIVE_DATA_YEARS=", df["Year"].min(), df["Year"].max())
+          print("LIVE_DATA_MISSING_PCT=")
+          print((df.isna().mean() * 100).round(2).sort_values(ascending=False).to_string())
 
           assert len(df) > 1000
           assert df["crop"].nunique() == 6
