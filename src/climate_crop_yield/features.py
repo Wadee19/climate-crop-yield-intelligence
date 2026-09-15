@@ -44,8 +44,8 @@ def _country_climate_normals(df: pd.DataFrame) -> pd.DataFrame:
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
     """Add descriptive features for EDA.
 
-    Climate deviations here use the full analysis period and are therefore descriptive,
-    not predictive features. The predictive model calculates its own train-only normals.
+    Climate deviations here use the full analysis period and are descriptive only.
+    The predictive model calculates separate train-only normals.
     """
     validate_panel(df)
     out = df.copy()
@@ -56,7 +56,6 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 
     out["temp_deviation_c"] = out["temperature_c"] - temp_normal
     out["precip_deviation_mm"] = out["precipitation_mm"] - rain_normal
-
     out["yield_log1p"] = np.log1p(out["yield_t_ha"].clip(lower=0))
 
     ordered = out.sort_values(["Code", "crop", "Year"])
@@ -76,6 +75,46 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _linear_residual(year: np.ndarray, values: np.ndarray) -> np.ndarray:
+    coef = np.polyfit(year.astype(float), values.astype(float), deg=1)
+    return values.astype(float) - np.polyval(coef, year.astype(float))
+
+
+def add_detrended_residuals(
+    df: pd.DataFrame,
+    min_observations: int = 8,
+) -> pd.DataFrame:
+    """Remove linear time trends within each country-crop history.
+
+    The resulting residuals isolate interannual co-movement better than raw levels:
+    - temp_detrended_c: temperature departures after removing that system's time trend
+    - yield_detrended_t_ha: yield departures after removing that system's time trend
+
+    This is still descriptive, not causal.
+    """
+    validate_panel(df)
+    out = df.copy()
+    out["temp_detrended_c"] = np.nan
+    out["yield_detrended_t_ha"] = np.nan
+
+    for (_, _), part in out.groupby(["Code", "crop"]):
+        valid = part.dropna(subset=["Year", "temperature_c", "yield_t_ha"])
+        if len(valid) < min_observations or valid["Year"].nunique() < min_observations:
+            continue
+
+        years = valid["Year"].to_numpy(float)
+        temp = valid["temperature_c"].to_numpy(float)
+        yield_values = valid["yield_t_ha"].to_numpy(float)
+
+        temp_resid = _linear_residual(years, temp)
+        yield_resid = _linear_residual(years, yield_values)
+
+        out.loc[valid.index, "temp_detrended_c"] = temp_resid
+        out.loc[valid.index, "yield_detrended_t_ha"] = yield_resid
+
+    return out
+
+
 def add_temperature_bins(df: pd.DataFrame, bins: int = 8) -> pd.DataFrame:
     out = df.copy()
     valid = out["temperature_c"].dropna()
@@ -91,25 +130,22 @@ def add_temperature_bins(df: pd.DataFrame, bins: int = 8) -> pd.DataFrame:
 
 
 def crop_temperature_sensitivity(df: pd.DataFrame) -> pd.DataFrame:
-    """Descriptive within-country×crop temperature sensitivity.
+    """Detrended within-country×crop temperature sensitivity by crop.
 
-    Both temperature and yield are demeaned inside each country-crop history before
-    pooling by crop. This removes persistent country/crop yield-level differences and
-    makes the slope describe warmer-than-usual years within the same production system.
+    Slow technology/yield improvements and slow warming trends are removed inside each
+    country-crop history before pooling. The remaining slope is an interannual
+    association and must not be interpreted as a causal temperature effect.
     """
-    work = df.dropna(subset=["yield_t_ha", "temperature_c"]).copy()
-    groups = work.groupby(["Code", "crop"])
-    work["temp_within_c"] = work["temperature_c"] - groups["temperature_c"].transform("mean")
-    work["yield_within_t_ha"] = work["yield_t_ha"] - groups["yield_t_ha"].transform("mean")
+    work = add_detrended_residuals(df)
+    work = work.dropna(subset=["temp_detrended_c", "yield_detrended_t_ha"])
 
     rows = []
     for crop, part in work.groupby("crop"):
-        part = part.dropna(subset=["temp_within_c", "yield_within_t_ha"])
-        if len(part) < 20 or part["temp_within_c"].nunique() < 3:
+        if len(part) < 20 or part["temp_detrended_c"].std() < 1e-8:
             continue
 
-        x = part["temp_within_c"].to_numpy(float)
-        y = part["yield_within_t_ha"].to_numpy(float)
+        x = part["temp_detrended_c"].to_numpy(float)
+        y = part["yield_detrended_t_ha"].to_numpy(float)
         slope = np.polyfit(x, y, deg=1)[0]
         rows.append(
             {

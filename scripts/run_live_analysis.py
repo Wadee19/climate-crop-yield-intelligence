@@ -6,7 +6,12 @@ import numpy as np
 import pandas as pd
 
 from climate_crop_yield.data import build_analysis_panel
-from climate_crop_yield.features import add_features, crop_temperature_sensitivity, validate_panel
+from climate_crop_yield.features import (
+    add_detrended_residuals,
+    add_features,
+    crop_temperature_sensitivity,
+    validate_panel,
+)
 from climate_crop_yield.model import fit_time_split
 
 
@@ -15,8 +20,11 @@ def pct(value: float) -> float:
 
 
 def build_risk_table(df: pd.DataFrame) -> pd.DataFrame:
+    """Prioritize unstable country-crop systems with negative detrended temp association."""
+    detrended = add_detrended_residuals(df, min_observations=15)
+
     base = (
-        df.dropna(subset=["yield_t_ha", "temp_deviation_c"])
+        detrended.dropna(subset=["yield_t_ha"])
         .groupby(["Code", "Entity", "crop"])
         .agg(
             yield_mean=("yield_t_ha", "mean"),
@@ -27,14 +35,13 @@ def build_risk_table(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     slopes = []
-    for (code, crop), part in df.dropna(
-        subset=["yield_t_ha", "temp_deviation_c"]
-    ).groupby(["Code", "crop"]):
-        if len(part) < 15 or part["temp_deviation_c"].nunique() < 4:
+    valid = detrended.dropna(subset=["temp_detrended_c", "yield_detrended_t_ha"])
+    for (code, crop), part in valid.groupby(["Code", "crop"]):
+        if len(part) < 15 or part["temp_detrended_c"].std() < 1e-8:
             continue
         slope = np.polyfit(
-            part["temp_deviation_c"].to_numpy(float),
-            part["yield_t_ha"].to_numpy(float),
+            part["temp_detrended_c"].to_numpy(float),
+            part["yield_detrended_t_ha"].to_numpy(float),
             deg=1,
         )[0]
         slopes.append({"Code": code, "crop": crop, "temp_slope": slope})
@@ -44,7 +51,7 @@ def build_risk_table(df: pd.DataFrame) -> pd.DataFrame:
     risk["volatility_cv"] = risk["yield_std"] / risk["yield_mean"]
     risk["warming_penalty"] = (-risk["temp_slope"]).clip(lower=0)
 
-    # Percentile ranks are less distorted by extreme country-crop values than raw z-scores.
+    # Percentile ranks reduce sensitivity to extreme country-crop values.
     risk["volatility_rank"] = risk["volatility_cv"].rank(pct=True)
     risk["warming_penalty_rank"] = risk["warming_penalty"].rank(pct=True)
     risk["risk_score"] = (
@@ -117,7 +124,7 @@ def main() -> None:
             row["crop"]: round(float(row["change_pct"]), 2)
             for _, row in trend.iterrows()
         },
-        "temperature_sensitivity_t_ha_per_1c": {
+        "detrended_temperature_sensitivity_t_ha_per_1c": {
             row["crop"]: round(
                 float(row["yield_change_t_ha_per_1c_deviation"]), 4
             )
@@ -130,7 +137,7 @@ def main() -> None:
                 "crop": row["crop"],
                 "risk_score": round(float(row["risk_score"]), 4),
                 "yield_volatility_cv": round(float(row["volatility_cv"]), 4),
-                "temp_slope": round(float(row["temp_slope"]), 4),
+                "detrended_temp_slope": round(float(row["temp_slope"]), 4),
                 "observations": int(row["observations"]),
             }
             for _, row in risk.head(15).iterrows()
