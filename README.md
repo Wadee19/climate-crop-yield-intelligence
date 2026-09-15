@@ -1,27 +1,33 @@
 # Climate Crop Yield Intelligence 🌾🌍
 
-### From warming to yield: where climate risk hits agriculture first.
+### From warming to yield: where climate pressure appears first.
 
 [![CI](https://github.com/Wadee19/climate-crop-yield-intelligence/actions/workflows/ci.yml/badge.svg)](https://github.com/Wadee19/climate-crop-yield-intelligence/actions/workflows/ci.yml)
-[![Live Data](https://github.com/Wadee19/climate-crop-yield-intelligence/actions/workflows/live-data-smoke.yml/badge.svg)](https://github.com/Wadee19/climate-crop-yield-intelligence/actions/workflows/live-data-smoke.yml)
+[![Live Data](https://github.com/Wadee19/climate-crop-yield-intelligence/actions/workflows/live-data-validation.yml/badge.svg)](https://github.com/Wadee19/climate-crop-yield-intelligence/actions/workflows/live-data-validation.yml)
 ![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![Version](https://img.shields.io/badge/version-v1.0-green.svg)
 ![Data](https://img.shields.io/badge/data-FAO%20%7C%20ERA5%20%7C%20World%20Bank-orange.svg)
 
 ## What is this project?
 
-This project studies one simple question:
+This is a business-first data science case study about climate, farm conditions and crop yield.
 
-> **Which crops and countries look more exposed to climate pressure, and can climate data improve crop-yield forecasting?**
+The main question is simple:
 
-I use real public data for **six crops** across **187 countries / territories** from **1990 to 2023**. The analysis combines crop yield, temperature, precipitation, fertilizer and irrigation data.
+> **Which crop-location combinations deserve attention first, and does annual climate information improve yield prediction beyond simple historical baselines?**
 
-The project has two goals:
+I use public data for **six crops**, **187 countries / territories**, and **1990–2023**.
 
-- find crop-location combinations that deserve attention first;
-- test whether annual climate information improves prediction beyond simple historical baselines.
+The project is not trying to prove that temperature causes a specific yield change. I use the data as a **screening and prediction problem**, and I keep the limitations visible.
 
-The main result is simple: climate variables add useful information, but **recent yield history is still the stronger short-term predictor** in this V1 model. The climate relationships in this project are treated as **associations, not causal effects**.
+### The short answer
+
+- Yield increased strongly over time, but not equally across crops.
+- After removing long-term trends and normalizing for crop scale, all six crops show a negative annual temperature-yield association.
+- A climate-only model improves on a static historical median, and fertilizer adds a small extra improvement.
+- **Persistence — the last observed pre-2018 yield — is still the strongest short-horizon baseline.**
+
+That last result is important. I keep it instead of forcing the ML model to look better than it is.
 
 ---
 
@@ -29,7 +35,7 @@ The main result is simple: climate variables add useful information, but **recen
 
 | | Live validated result |
 |---|---:|
-| Country × year × crop records | **24,892** |
+| Country × year × crop rows | **24,892** |
 | Countries / territories | **187** |
 | Crops | **6** |
 | Analysis period | **1990–2023** |
@@ -38,129 +44,121 @@ The main result is simple: climate variables add useful information, but **recen
 | Fertilizer coverage | **97.15%** |
 | Irrigation coverage | **22.64%** |
 
-Crops in V1:
-
-`Wheat` · `Maize` · `Rice` · `Potatoes` · `Soybeans` · `Barley`
-
-The notebook was also run end-to-end in Google Colab with all outputs and figures saved.
+Crops: `Wheat` · `Maize` · `Rice` · `Potatoes` · `Soybeans` · `Barley`
 
 ---
 
-## The story in three charts
+## Three charts that tell the story
 
-### 1. After removing long-term trends, hotter years are associated with lower yield
+### 1. Long-run yield change, using the same country cohort in both periods
 
-![Detrended temperature sensitivity](reports/figures/03_temperature_sensitivity.svg)
+![Matched-country yield change](reports/figures/01_matched_yield_change.png)
 
-After detrending each country × crop history, all six pooled crop slopes are negative. The strongest associations are:
+I compare **1990–1994** with **2019–2023**, but only for country-crop histories observed in both windows.
 
-- **Potatoes:** -0.2725 t/ha per +1°C
-- **Maize:** -0.1715 t/ha per +1°C
+| Crop | Median yield change |
+|---|---:|
+| Maize | **+106.75%** |
+| Rice | **+52.40%** |
+| Potatoes | **+50.06%** |
+| Barley | **+48.59%** |
+| Wheat | **+38.51%** |
+| Soybeans | **+18.02%** |
 
-These are descriptive associations, not causal temperature effects.
+Why I changed this: a simple early-vs-late comparison can move because the available countries changed. Matching the same countries makes the comparison cleaner.
 
-### 2. Risk is local
+### 2. Temperature sensitivity in relative units
 
-![Climate risk screen](reports/figures/07_risk_screen.svg)
+![Relative temperature sensitivity](reports/figures/03_temperature_sensitivity_relative.png)
 
-The risk screen combines:
+I first remove the linear time trend inside each country × crop history. Then I express the yield residual as a percentage of that system's mean yield.
 
-- detrended yield volatility;
-- a negative detrended temperature-yield association.
+| Crop | Detrended yield association per +1°C |
+|---|---:|
+| Maize | **-4.41%** |
+| Soybeans | **-4.38%** |
+| Barley | **-3.59%** |
+| Wheat | **-2.39%** |
+| Potatoes | **-1.47%** |
+| Rice | **-0.95%** |
 
-The highest V1 priority segments are led by **Oman–Barley**, **Oman–Maize**, and **Rwanda–Potatoes**.
+Why I changed this: raw `t/ha per °C` made high-yield crops such as potatoes look mechanically more sensitive. Relative `% yield per +1°C` is a fairer cross-crop comparison.
 
-This is a prioritization screen, not an insurance probability.
+These are **descriptive associations, not causal effects**.
 
-### 3. The strongest baseline wins
+### 3. Climate value, fertilizer value and strong baselines
 
-![Model vs baselines](reports/figures/08_model_vs_baselines.svg)
+![Model ablation and baselines](reports/figures/08_model_ablation_baselines.png)
 
-The model trains on data before 2018 and is tested on 2018–2023.
+The prediction experiment trains on **1990–2017** and tests on **2018–2023**.
 
 | 2018+ holdout | MAE, t/ha |
 |---|---:|
 | Persistence: last pre-2018 yield | **0.8976** |
-| Climate-anomaly residual model | **1.4472** |
+| Climate + fertilizer | **1.4473** |
+| Climate only | **1.4816** |
 | Country × crop historical median | **1.6192** |
-| Crop median baseline | **3.4478** |
+| Crop median | **3.4478** |
 
-The climate-anomaly model improves on the static country × crop median by **10.62%** and reaches **R² = 0.9038**.
+Climate-only improves on the static country × crop median by **8.50%**. Adding fertilizer improves MAE by another **2.32%** relative to climate-only. The full model reaches **R² = 0.9038**.
 
-But persistence is clearly stronger.
+But persistence is still clearly better.
 
-> **Main client message:** recent production history is more useful for short-horizon yield prediction than annual climate anomalies alone.
-
-That is a useful result, even though the more complicated model does not win.
+> **Main decision message:** annual country-level climate information adds signal, but recent production history carries more short-horizon predictive value in this V1 dataset.
 
 ---
 
-## What I found
+## Where should I investigate first?
 
-| Question | V1 result |
-|---|---|
-| Which crop improved most? | **Maize**, +121.6% median yield change |
-| Strongest negative detrended temperature association? | **Potatoes**, -0.2725 t/ha per +1°C |
-| Top risk-screen segment? | **Oman – Barley** |
-| Climate model MAE | **1.4472 t/ha** |
-| Model R² | **0.9038** |
-| Best forecasting baseline | **Persistence**, 0.8976 MAE |
-| Hardest crop for the model | **Potatoes**, ~3.89 t/ha MAE |
-| Lowest crop-level model error | **Soybeans**, ~0.42 t/ha MAE |
+The V1 priority screen combines two scale-aware signals:
+
+- detrended yield volatility in percentage points;
+- negative detrended temperature association in `% yield per +1°C`.
+
+A country-crop history needs at least **20 usable observations** before it can enter the ranking.
+
+Top five validated segments:
+
+| Priority | Country | Crop | Screening score |
+|---:|---|---|---:|
+| 1 | Oman | Barley | **0.9930** |
+| 2 | Turkmenistan | Maize | **0.9916** |
+| 3 | Cape Verde | Maize | **0.9839** |
+| 4 | Malawi | Wheat | **0.9832** |
+| 5 | Rwanda | Potatoes | **0.9783** |
+
+This is a **screening score**, not a probability of crop loss and not a causal climate-damage estimate.
 
 ---
 
-## Why this project is different
+## My decision story
 
-This is not a notebook full of unrelated plots.
+I keep the reasoning visible instead of hiding it inside code.
 
-The project follows one decision story:
+A few examples:
 
-**Business question → evidence → interpretation → limitation → client action**
+- I found that crop yield scales were very different, so I moved the public sensitivity comparison from raw `t/ha` to relative `% yield`.
+- I found that early and recent samples could contain different countries, so I matched the same country cohort across both periods.
+- I found that fertilizer was being mixed into the word “climate”, so I separated **climate only** from **climate + fertilizer**.
+- I found that full-period climate normals would leak future information into the prediction experiment, so predictive anomalies use **training years only**.
+- I found that irrigation coverage was only **22.64%**, so I kept it exploratory instead of mostly imputing it into the model.
+- I found that a complex model can look strong against a weak baseline, so I kept **persistence** as the hardest reference.
 
-It also corrects several shortcuts from the earlier university analysis:
-
-| Earlier shortcut | V1 approach |
-|---|---|
-| Raw correlation = impact | Association is separated from causation |
-| One exact temperature = “best” | Temperature ranges / bins |
-| Compare naturally hot and cold countries | Within-country climate deviations |
-| Ignore long-term productivity trend | Country × crop detrending |
-| Random train/test split | Past → future time split |
-| One weak baseline | Crop median + country-crop median + persistence |
-| Use every available feature | Coverage decides whether a feature belongs in the core model |
-| Show only good model results | Baseline failure and error analysis are explicit |
-| Notebook-only project | Notebook + package + tests + CI + live-data validation |
+The full plain-English reasoning trail is in [`docs/decision_story.md`](docs/decision_story.md).
 
 ---
 
 ## Data
 
-The notebook downloads public data directly from reproducible Our World in Data Grapher CSV endpoints.
+The notebook downloads public data from reproducible Our World in Data Grapher CSV endpoints.
 
 - **Crop yields:** FAO Production: Crops and livestock products
 - **Temperature & precipitation:** Copernicus Climate Change Service / ERA5
 - **Fertilizer & irrigation:** FAO / World Bank indicator series
 
-Only ISO-3 country / territory rows are kept. OWID regional aggregates such as `OWID_AFR` and `OWID_WRL` are excluded.
-
-Irrigation has only **22.64%** observed coverage in the final panel, so it is used for exploratory analysis only and is deliberately excluded from the core predictive model.
+Only three-letter country / territory codes are kept. OWID aggregates such as `OWID_AFR` and `OWID_WRL` are excluded.
 
 See [`docs/data_sources.md`](docs/data_sources.md) and [`docs/methodology.md`](docs/methodology.md).
-
----
-
-## Business questions
-
-1. Which crops improved the most since 1990?
-2. What happens in warmer-than-trend years?
-3. Which crops look most temperature sensitive?
-4. Is there really one “perfect temperature”?
-5. Does more precipitation always mean better yield?
-6. What do irrigation and fertilizer tell us?
-7. Which country-crop combinations deserve investigation first?
-8. Can climate information beat strong forecasting baselines?
-9. Where does the model fail?
 
 ---
 
@@ -169,39 +167,72 @@ See [`docs/data_sources.md`](docs/data_sources.md) and [`docs/methodology.md`](d
 **Train:** 1990–2017  
 **Test:** 2018–2023
 
-The model starts from each country × crop's historical training-period yield level and predicts a residual correction using:
+The predictive experiment starts from each country × crop's historical training-period median yield and learns a residual correction.
 
-- temperature anomaly relative to the training-period country normal;
-- precipitation anomaly relative to the training-period country normal;
-- fertilizer anomaly relative to the training-period country normal;
-- crop identity.
+### Climate-only model
 
-Train-only normals prevent future climate information from leaking into the model.
+- temperature anomaly
+- precipitation anomaly
+- crop identity
 
-The Random Forest uses:
+### Climate + fertilizer model
 
-- **250 trees** — enough for a stable ensemble without making this project unnecessarily heavy;
-- **min_samples_leaf = 5** — smooths noisy leaf rules;
-- **random_state = 42** — reproducibility.
+- temperature anomaly
+- precipitation anomaly
+- fertilizer anomaly
+- crop identity
 
-These parameters were **not tuned against the 2018+ test set**.
+All anomaly normals are calculated from the **training period only**.
+
+Random Forest settings:
+
+- `n_estimators = 250`
+- `min_samples_leaf = 5`
+- `random_state = 42`
+
+These values were fixed before evaluating the 2018+ holdout and were **not tuned on the test period**.
+
+---
+
+## Reproducibility
+
+The live GitHub Actions workflow does all of the following from a clean runner:
+
+1. downloads the public data;
+2. rebuilds and validates the panel;
+3. runs the package analysis;
+4. generates the validated figures;
+5. executes the standalone portfolio notebook end to end;
+6. compares notebook headline results with package results;
+7. uploads the summaries, figures and executed notebook as artifacts.
+
+Current validation status:
+
+- **CI:** PASS
+- **Live data build:** PASS
+- **Full analysis:** PASS
+- **Notebook Run All:** PASS
+- **Notebook ↔ package parity:** PASS
+- **Artifact generation:** PASS
+
+The validated environment is pinned in `requirements.txt`.
 
 ---
 
 ## Notebook
 
-The main notebook is:
+Main notebook:
 
 [`notebooks/01_climate_crop_yield_business_analysis.ipynb`](notebooks/01_climate_crop_yield_business_analysis.ipynb)
 
-It is self-contained for portfolio use:
+It is standalone for portfolio use:
 
-- imports the public datasets directly;
-- explains important parameter choices in simple language;
-- saves the main figures during the run;
-- runs without requiring the local `src/` package.
+- public data load directly from the source links;
+- important choices are explained in simple first-person Markdown;
+- the notebook does not require the local `src/` package to run;
+- a normal CPU runtime is enough.
 
-The notebook was verified end-to-end in Google Colab. The repository keeps a clean runnable notebook, while the README shows the validated portfolio visuals.
+See [`RUN_IN_COLAB.md`](RUN_IN_COLAB.md).
 
 ---
 
@@ -211,12 +242,13 @@ The notebook was verified end-to-end in Google Colab. The repository keeps a cle
 climate-crop-yield-intelligence/
 ├── .github/workflows/
 │   ├── ci.yml
-│   └── live-data-smoke.yml
+│   └── live-data-validation.yml
 ├── data/
 │   ├── raw/
 │   └── processed/
 ├── docs/
 │   ├── data_sources.md
+│   ├── decision_story.md
 │   ├── methodology.md
 │   └── project_history.md
 ├── notebooks/
@@ -226,6 +258,8 @@ climate-crop-yield-intelligence/
 │   └── tables/
 ├── scripts/
 │   └── run_live_analysis.py
+├── slides/
+│   └── presentation_story.md
 ├── src/climate_crop_yield/
 │   ├── analysis.py
 │   ├── data.py
@@ -241,66 +275,21 @@ climate-crop-yield-intelligence/
 
 ---
 
-## Reproduce it
-
-### Google Colab
-
-1. Open `notebooks/01_climate_crop_yield_business_analysis.ipynb`.
-2. Upload the notebook to Colab.
-3. Use a normal **Python CPU runtime**.
-4. Run all cells from top to bottom.
-
-No repository ZIP or local package install is required. The notebook downloads the public datasets at run time.
-
-### Local
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
-pytest -q
-python scripts/run_live_analysis.py
-jupyter notebook
-```
-
-Running `python scripts/run_live_analysis.py` also writes a machine-readable summary to:
-
-`reports/tables/live_analysis_summary.json`
-
-### GitHub Actions
-
-Two workflows protect the project:
-
-- **CI** — runs the offline test suite on every push / pull request.
-- **Live data validation** — downloads the real public datasets, rebuilds the analysis panel, runs the full live analysis report, executes the portfolio notebook end to end, and uploads validated artifacts.
-
----
-
 ## What V1 does not claim
 
 This project does **not** claim that temperature, precipitation, fertilizer or irrigation cause the observed yield changes.
 
-Country-level annual data cannot directly capture:
+Country-year data cannot directly capture growing-season heat extremes, rainfall timing, crop calendars, local soils, cultivar choice, planting dates, irrigation efficiency, farm-level management, prices or policy changes.
 
-- growing-season heat extremes;
-- rainfall timing;
-- soil and field conditions;
-- planting dates;
-- cultivar choice;
-- irrigation efficiency;
-- local management quality;
-- prices and policy changes.
+The priority screen is not an insurance model. The predictive model is not a farm-level forecasting system.
 
-The risk score is a screening tool, and the predictive model is a country-level decision-support baseline — not a farm-level forecasting system.
+The clearest next upgrade is more local, growing-season-specific data.
 
 ---
 
 ## Presentation
 
-The portfolio presentation story is:
-
-### **From Warming to Yield — Where Climate Risk Hits Agriculture First**
+### **From Warming to Yield — Where Climate Pressure Appears First**
 
 See [`slides/presentation_story.md`](slides/presentation_story.md).
 
@@ -311,9 +300,9 @@ See [`slides/presentation_story.md`](slides/presentation_story.md).
 
 The core business idea was first explored in a university analysis around **2022**.
 
-The **2026** project was rebuilt from the ground up using updated public data, six crop series, stronger methodology, time-aware model evaluation, error analysis, tests and a reproducible repository structure.
+The **2026** version was rebuilt from the ground up with updated public data, stronger methodology, matched-country comparisons, scale-aware climate analysis, time-aware model evaluation, ablation, strong baselines, tests and automated parity checks.
 
-**v1.0 is the first public portfolio release.**
+**v1.0 is the first portfolio release.**
 
 The old university notebook is not included in the main repository; it is retained only as historical source material and a style reference.
 
